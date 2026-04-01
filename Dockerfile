@@ -82,5 +82,5 @@ RUN uv sync --python 3.12 && \
 
 # 5. 安装前端 Node 依赖包
 # 修复了你提供的代码中路径拷贝错误的问题
-COPY web/package.json web/
+COPY package.json web/
 RUN cd web && npm install
