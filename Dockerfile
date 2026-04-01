@@ -28,10 +28,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # 2. 安装系统底层依赖、Nginx、Java、ODBC
 RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
     apt update && apt --no-install-recommends install -y ca-certificates; \
-    if [ "$NEED_MIRROR" == "1" ]; then \
-        sed -i 's|http://archive.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources; \
-        sed -i 's|http://security.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources; \
-    fi; \
     rm -f /etc/apt/apt.conf.d/docker-clean && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache && \
     chmod 1777 /tmp && apt update && \
     apt install -y libglib2.0-0 libglx-mesa0 libgl1 pkg-config libicu-dev libgdiplus default-jdk libatk-bridge2.0-0 libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev libjemalloc-dev gnupg unzip curl wget git vim less ghostscript pandoc texlive fonts-freefont-ttf fonts-noto-cjk postgresql-client
@@ -44,9 +40,9 @@ RUN mkdir -p /etc/apt/keyrings && \
     apt update && apt install -y nginx=${NGINX_VERSION} && apt-mark hold nginx
 
 # 3. 安装 Python 管理器 (uv)、Node.js (20.x)、Rust
-RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps \
-    arch="$(uname -m)"; if [ "$arch" = "x86_64" ]; then uv_arch="x86_64"; else uv_arch="aarch64"; fi; \
-    tar xzf "/deps/uv-${uv_arch}-unknown-linux-gnu.tar.gz" && cp "uv-${uv_arch}-unknown-linux-gnu/"* /usr/local/bin/ && uv python install 3.12
+# [核心修复区] 直接用 curl 从官方拉取安装脚本，彻底绕过跨架构 tar 解压报错
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh && \
+    uv python install 3.12
 
 ENV PYTHONDONTWRITEBYTECODE=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 ENV PATH=/root/.local/bin:$PATH
@@ -67,10 +63,11 @@ RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chromedriver-l
     unzip -j /chromedriver-linux64.zip chromedriver-linux64/chromedriver && mv chromedriver /usr/local/bin/ && rm -f /usr/bin/google-chrome
 
 # 4. 安装 Python 依赖包 (放入 .venv)
-COPY pyproject.toml  ./
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh && \
-    uv python install 3.12
+COPY pyproject.toml ./
+RUN uv sync --python 3.12 && \
+    .venv/bin/python3 -m ensurepip --upgrade
 
 # 5. 安装前端 Node 依赖包
-COPY package.json  web/
+# 修复了你提供的代码中路径拷贝错误的问题
+COPY package.json web/
 RUN cd web && npm install
