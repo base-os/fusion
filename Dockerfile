@@ -67,7 +67,7 @@ RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chromedriver-l
     unzip -j /chromedriver-linux64.zip chromedriver-linux64/chromedriver && mv chromedriver /usr/local/bin/ && rm -f /usr/bin/google-chrome
 
 # 4. 安装 Python 依赖包 (放入 .venv)
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml  ./
 RUN if [ "$NEED_MIRROR" == "1" ]; then sed -i 's|pypi.org|pypi.tuna.tsinghua.edu.cn|g' uv.lock; fi; \
     uv sync --python 3.12 --frozen && .venv/bin/python3 -m ensurepip --upgrade
 
