@@ -1,16 +1,57 @@
-# 仅用于测试 ODBC 安装的极简环境
+# ==========================================
+# 文件名: Dockerfile.deps
+# 作用: 构建基础环境、安装系统依赖、下载 Python/Node 库
+# ==========================================
 FROM ubuntu:24.04
 USER root
 SHELL ["/bin/bash", "-c"]
 
-# 消除交互式安装的弹窗
+ARG NEED_MIRROR=0
+WORKDIR /ragflow
+
+# 1. 复制模型和外部依赖 (从官方 deps 镜像)
+RUN mkdir -p /ragflow/rag/res/deepdoc /root/.ragflow
+RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/huggingface.co,target=/huggingface.co \
+    tar --exclude='.*' -cf - \
+        /huggingface.co/InfiniFlow/text_concat_xgb_v1.0 \
+        /huggingface.co/InfiniFlow/deepdoc \
+        | tar -xf - --strip-components=3 -C /ragflow/rag/res/deepdoc
+
+RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps \
+    cp -r /deps/nltk_data /root/ && \
+    cp /deps/tika-server-standard-3.2.3.jar /deps/tika-server-standard-3.2.3.jar.md5 /ragflow/ && \
+    cp /deps/cl100k_base.tiktoken /ragflow/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+
+ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard-3.2.3.jar"
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 1. 模拟前面的步骤：先安装基础工具 (curl 和 gnupg 是必须要的)
-RUN apt-get update && apt-get install -y curl gnupg ca-certificates
+# 2. 安装系统底层依赖、Nginx、Java、ODBC
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+    apt update && apt --no-install-recommends install -y ca-certificates; \
+    rm -f /etc/apt/apt.conf.d/docker-clean && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache && \
+    chmod 1777 /tmp && apt update && \
+    apt install -y libglib2.0-0 libglx-mesa0 libgl1 pkg-config libicu-dev libgdiplus default-jdk libatk-bridge2.0-0 libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev libjemalloc-dev gnupg unzip curl wget git vim less ghostscript pandoc texlive fonts-freefont-ttf fonts-noto-cjk postgresql-client
 
-# 2. 我们正在集中攻克和测试的 ODBC 驱动代码！
-# 彻底废弃旧的 list 格式，改用 Ubuntu 24.04 最严格要求的 deb822 规范文件
+# Nginx
+ARG NGINX_VERSION=1.29.5-1~noble
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /etc/apt/keyrings/nginx-archive-keyring.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/ubuntu/ noble nginx" > /etc/apt/sources.list.d/nginx.list && \
+    apt update && apt install -y nginx=${NGINX_VERSION} && apt-mark hold nginx
+
+# 3. 安装 Python 管理器 (uv)、Node.js (20.x)、Rust
+# [核心修复区] 直接用 curl 从官方拉取安装脚本，彻底绕过跨架构 tar 解压报错
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh && \
+    uv python install 3.12
+
+ENV PYTHONDONTWRITEBYTECODE=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ENV PATH=/root/.local/bin:$PATH
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt purge -y nodejs npm cargo && apt autoremove -y && apt update && apt install -y nodejs
+RUN apt update && apt install -y curl build-essential && curl --proto '=https' --tlsv1.2 --http1.1 -sSf https://sh.rustup.rs | bash -s -- -y --profile minimal && echo 'export PATH="/root/.cargo/bin:${PATH}"' >> /root/.bashrc
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Microsoft ODBC
 RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps \
     # 先配置好合法的微软源
     curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg && \
@@ -32,3 +73,19 @@ RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps 
     else \
         ACCEPT_EULA=Y apt-get install -y unixodbc-dev msodbcsql17; \
     fi
+
+# Chrome
+RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chrome-linux64-121-0-6167-85,target=/chrome-linux64.zip \
+    unzip /chrome-linux64.zip && mv chrome-linux64 /opt/chrome && ln -s /opt/chrome/chrome /usr/local/bin/
+RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chromedriver-linux64-121-0-6167-85,target=/chromedriver-linux64.zip \
+    unzip -j /chromedriver-linux64.zip chromedriver-linux64/chromedriver && mv chromedriver /usr/local/bin/ && rm -f /usr/bin/google-chrome
+
+# 4. 安装 Python 依赖包 (放入 .venv)
+COPY pyproject.toml ./
+RUN uv sync --python 3.12 && \
+    .venv/bin/python3 -m ensurepip --upgrade
+
+# 5. 安装前端 Node 依赖包
+# 修复了你提供的代码中路径拷贝错误的问题
+COPY package.json web/
+RUN cd web && npm install
