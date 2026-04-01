@@ -68,8 +68,9 @@ RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chromedriver-l
 
 # 4. 安装 Python 依赖包 (放入 .venv)
 COPY pyproject.toml  ./
-RUN if [ "$NEED_MIRROR" == "1" ]; then sed -i 's|pypi.org|pypi.tuna.tsinghua.edu.cn|g' uv.lock; fi; \
-    uv sync --python 3.12 --frozen && .venv/bin/python3 -m ensurepip --upgrade
+RUN export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple" && \
+    uv sync --python 3.12 && \
+    .venv/bin/python3 -m ensurepip --upgrade
 
 # 5. 安装前端 Node 依赖包
 COPY package.json  web/
