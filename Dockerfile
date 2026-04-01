@@ -72,5 +72,5 @@ RUN if [ "$NEED_MIRROR" == "1" ]; then sed -i 's|pypi.org|pypi.tuna.tsinghua.edu
     uv sync --python 3.12 --frozen && .venv/bin/python3 -m ensurepip --upgrade
 
 # 5. 安装前端 Node 依赖包
-COPY package.json package-lock.json* web/
+COPY package.json  web/
 RUN cd web && npm install
