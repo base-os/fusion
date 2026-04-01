@@ -52,9 +52,22 @@ RUN apt update && apt install -y curl build-essential && curl --proto '=https' -
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Microsoft ODBC
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
-    curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
-    apt update && ACCEPT_EULA=Y apt install -y unixodbc-dev msodbcsql17
+# 修复 exit code 100: Ubuntu 24.04 缺少 libssl1.1，msodbcsql17 强依赖它，必须先用 deps 镜像里的包安装
+RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps \
+    if [ "$(uname -m)" = "x86_64" ]; then \
+        dpkg -i /deps/libssl1.1_1.1.1f-1ubuntu2_amd64.deb; \
+    elif [ "$(uname -m)" = "aarch64" ]; then \
+        dpkg -i /deps/libssl1.1_1.1.1f-1ubuntu2_arm64.deb; \
+    fi && \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt update && \
+    arch="$(uname -m)"; \
+    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
+        ACCEPT_EULA=Y apt install -y unixodbc-dev msodbcsql18; \
+    else \
+        ACCEPT_EULA=Y apt install -y unixodbc-dev msodbcsql17; \
+    fi
 
 # Chrome
 RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chrome-linux64-121-0-6167-85,target=/chrome-linux64.zip \
@@ -69,5 +82,5 @@ RUN uv sync --python 3.12 && \
 
 # 5. 安装前端 Node 依赖包
 # 修复了你提供的代码中路径拷贝错误的问题
-COPY package.json web/
+COPY web/package.json web/
 RUN cd web && npm install
