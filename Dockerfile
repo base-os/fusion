@@ -30,9 +30,22 @@ RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
     apt update && apt --no-install-recommends install -y ca-certificates; \
     rm -f /etc/apt/apt.conf.d/docker-clean && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache && \
     chmod 1777 /tmp && apt update && \
-    apt install -y libglib2.0-0 libglx-mesa0 libgl1 pkg-config libicu-dev libgdiplus default-jdk libatk-bridge2.0-0 libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev libjemalloc-dev gnupg unzip curl wget git vim less ghostscript pandoc texlive fonts-freefont-ttf fonts-noto-cjk postgresql-client && \
-    apt-get install -y --only-upgrade mupdf-tools libmupdf-dev 
+    apt install -y libglib2.0-0 libglx-mesa0 libgl1 pkg-config libicu-dev libgdiplus default-jdk libatk-bridge2.0-0 libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev libjemalloc-dev gnupg unzip curl wget git vim less ghostscript pandoc texlive fonts-freefont-ttf fonts-noto-cjk postgresql-client
 
+
+RUN arch="$(uname -m)"; \
+    if [ "$arch" = "x86_64" ]; then \
+        wget -qO /tmp/libmupdf.deb "http://security.ubuntu.com/ubuntu/pool/universe/m/mupdf/libmupdf-dev_1.23.10+ds1-1ubuntu0.1_amd64.deb" && \
+        wget -qO /tmp/mupdf-tools.deb "http://security.ubuntu.com/ubuntu/pool/universe/m/mupdf/mupdf-tools_1.23.10+ds1-1ubuntu0.1_amd64.deb"; \
+    elif [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then \
+        wget -qO /tmp/libmupdf.deb "http://ports.ubuntu.com/pool/universe/m/mupdf/libmupdf-dev_1.23.10+ds1-1ubuntu0.1_arm64.deb" && \
+        wget -qO /tmp/mupdf-tools.deb "http://ports.ubuntu.com/pool/universe/m/mupdf/mupdf-tools_1.23.10+ds1-1ubuntu0.1_arm64.deb"; \
+    fi && \
+    dpkg -i /tmp/libmupdf.deb /tmp/mupdf-tools.deb || true && \
+    apt-get --fix-broken install -y && \
+    rm -f /tmp/libmupdf.deb /tmp/mupdf-tools.deb
+
+    
 # Nginx
 ARG NGINX_VERSION=1.29.5-1~noble
 RUN mkdir -p /etc/apt/keyrings && \
