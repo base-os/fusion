@@ -50,7 +50,7 @@ jobs:
           images: |
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
           tags: |
-            type=raw,value=v2.0.3
+            type=raw,value=v2.0.4
 
       # 3. 构建并推送多架构镜像（关键修改）
       - name: Build and push multi-arch Docker image
