@@ -41,6 +41,7 @@ RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
     fi && \
     apt-get update && \
     apt-get install -y libglib2.0-0 libglx-mesa0 libgl1 pkg-config libicu-dev libgdiplus default-jdk libatk-bridge2.0-0 libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev libjemalloc-dev gnupg unzip curl wget git vim less ghostscript pandoc texlive fonts-freefont-ttf fonts-noto-cjk postgresql-client && \
+    apt-get install -y --only-upgrade curl libcurl4 mupdf-tools libmupdf-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Nginx
