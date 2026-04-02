@@ -98,7 +98,6 @@ RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chrome-linux64
     unzip /chrome-linux64.zip && mv chrome-linux64 /opt/chrome && ln -s /opt/chrome/chrome /usr/local/bin/
 RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chromedriver-linux64-121-0-6167-85,target=/chromedriver-linux64.zip \
     unzip -j /chromedriver-linux64.zip chromedriver-linux64/chromedriver && mv chromedriver /usr/local/bin/ && rm -f /usr/bin/google-chrome
-
 RUN apt-get purge -y curl libcurl4 && \
     apt-get autoremove -y && \
     apt-get clean && \
